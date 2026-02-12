@@ -12,9 +12,15 @@ import matplotlib.pyplot as plt
 
 # initializes a sensor with a name, uncertainty and its own faux measurements at each time step
 class UWB_sensor:
-    def __init__(self, name, uncertainty):
+    def __init__(self, name, uncertainty, anchor_pos):
+        """
+        name: string, sensor name
+        uncertainty: variance of measurement noise (sigma^2)
+        anchor_pos: (x, y) tuple, location of the sensor anchor
+        """
         self.name = name
-        self.uncertainty = uncertainty  # variance
+        self.uncertainty = uncertainty  
+        self.anchor_pos = np.array(anchor_pos)
         self.value = None
         self.true_distance = 0.0 
         print(f"Sensor {self.name} initialized.")
@@ -30,15 +36,16 @@ class UWB_sensor:
         return np.array([[self.uncertainty]])
 
     # For testing ONLY: simulate a measurement (0 m --> 10 m) with Gaussian noise
-    def stepFakeMeasurement(self):
-        if self.true_distance > 10:
-            self.true_distance = 0.0
+    def stepFakeMeasurement(self, true_px, true_py):
+        dx = true_px - self.anchor_pos[0]
+        dy = true_py - self.anchor_pos[1]
+        true_distance = np.sqrt(dx**2 + dy**2)
 
+        # Add Gaussian noise
         sigma = np.sqrt(self.uncertainty)
-        noisy_measurement = self.true_distance + np.random.normal(0, sigma)
+        noisy_measurement = true_distance + np.random.normal(0, sigma)
 
         self.value = noisy_measurement
-        self.true_distance += 1.0
 
     def getMeasurement(self):
         if self.value is None:
@@ -72,8 +79,8 @@ class EKF:
         self.Q = np.eye(6) * q
 
     # allows EKF to talk to the sensors and anchors
-    def addSensor(self, sensor, anchor_pos):
-        self.sensors.append((sensor, np.array(anchor_pos)))
+    def addSensor(self, sensor):
+        self.sensors.append((sensor, sensor.anchor_pos))
 
     # PREDICTION -------------------------------------
 
@@ -130,25 +137,73 @@ class EKF:
             self.updateWithSensor(sensor, anchor)
 
 
+
+# Actual simulation to see if it is working (1D motion with 2 anchors for now, but can easily be extended to 2D with more anchors)
+# note: lots of changable variables to mess with woo
+# goal to amke it more general later this is to see if it works at all ugh
 if __name__ == "__main__":
     dt = 0.1
     ekf = EKF(dt)
 
-    # Create sensors with variance = 0.04 (std ≈ 0.2 m)
-    s1 = UWB_sensor("Anchor_1", uncertainty=0.04)
-    s2 = UWB_sensor("Anchor_2", uncertainty=0.04)
+    # Create sensors here:
+    s1 = UWB_sensor("Anchor_1", uncertainty=0.04, anchor_pos=(0, 0))
+    s2 = UWB_sensor("Anchor_2", uncertainty=0.04, anchor_pos=(10, 0))
 
-    # Anchor positions
-    ekf.addSensor(s1, anchor_pos=(0, 0))
-    ekf.addSensor(s2, anchor_pos=(10, 0))
+    # add sensors to EKF IMPORTANT
+    ekf.addSensor(s1)
+    ekf.addSensor(s2)
+
+    # Ground-truth state for testing: [px, py, vx, vy, ax, ay]
+    true_state = np.zeros((6, 1))
+    true_state[2, 0] = 1.0   # slow starting velocity
+    true_state[4, 0] = 0.2   # gave it baby accel for now
+
+    # for plotting later 
+    true_x_history = []
+    pred_x_history = []
+    uncertainty_history = []
+    time_steps = []
 
     # Run simulation
-    for step in range(20):
-        s1.stepFakeMeasurement()
-        s2.stepFakeMeasurement()
+    for step in range(50):
+        # fake real motion without noise ***for testing only***
+        true_state = ekf.F @ true_state
+        true_px, true_py = true_state[0, 0], true_state[1, 0]
 
+        # sensors "measure" distance to true position w/noise
+        s1.stepFakeMeasurement(true_px, true_py)
+        s2.stepFakeMeasurement(true_px, true_py)
+
+        # EKF steps
         ekf.step()
-
         state = ekf.x.flatten()
-        print(f"Step {step}: x={state[0]:.2f}, y={state[1]:.2f}, "
-              f"vx={state[2]:.2f}, vy={state[3]:.2f}")
+
+        # Logging for plotting
+        true_x_history.append(true_px)
+        pred_x_history.append(state[0])
+        uncertainty_history.append(np.sqrt(ekf.P[0, 0]))
+        time_steps.append(step)
+
+    # Plot
+    plt.figure(figsize=(10, 5))
+
+    plt.plot(time_steps, true_x_history, label="True Position (x)", linewidth=2)
+    plt.plot(time_steps, pred_x_history, label="Kalman Predicted (x)", linestyle="--")
+
+    pred = np.array(pred_x_history)
+    unc = np.array(uncertainty_history)
+
+    plt.fill_between(
+        time_steps,
+        pred - unc,
+        pred + unc,
+        alpha=0.2,
+        label="Uncertainty (±1σ)"
+    )
+
+    plt.xlabel("Time Step")
+    plt.ylabel("Position (x)")
+    plt.title("EKF: True vs Predicted Position with Uncertainty")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
