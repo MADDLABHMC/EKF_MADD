@@ -24,6 +24,63 @@ def plot_covariance_ellipse(px, py, cov, n_std=1.0, **kwargs):
     ellipse = Ellipse((px, py), width, height, angle=angle, **kwargs)    
     plt.gca().add_patch(ellipse)
 
+def linear_path(t, start, velocity):
+    '''
+    Docstring for linear_path
+    
+    :param t: time
+    :param start: starting location
+    :param velocity: velocity at a time
+    '''
+    x = start[0] + velocity[0]*t
+    y = start[1] + velocity[1]*t
+    return x, y
+
+def circular_path(t, center, radius, omega):
+    '''
+    Docstring for circular_path
+    
+    :param t: time
+    :param center: center coords
+    :param radius: in m
+    :param omega: rad/sec
+    '''
+    x = center[0] + radius * np.cos(omega * t)
+    y = center[1] + radius * np.sin(omega * t)
+    return x, y
+
+def elliptical_path(t, center, a, b, omega):
+    '''
+    Docstring for elliptical_path
+    
+    :param t: time
+    :param center: center coords
+    :param a: small
+    :param b: big
+    :param omega: rad/sec
+    '''
+    # a = x semi-axis, b = y semi-axis
+    x = center[0] + a * np.cos(omega * t)
+    y = center[1] + b * np.sin(omega * t)
+    return x, y
+
+# working on a nonlinear accel model referencing g4g
+def make_Q(dt, sigma_a=1.0):
+    dt2 = dt**2
+    dt3 = dt**3
+    dt4 = dt**4
+    dt5 = dt**5
+
+    q = np.array([
+        [dt5/20, 0,      dt4/8, 0,      dt3/6, 0],
+        [0,      dt5/20, 0,      dt4/8, 0,      dt3/6],
+        [dt4/8,  0,      dt3/3, 0,      dt2/2, 0],
+        [0,      dt4/8,  0,      dt3/3, 0,      dt2/2],
+        [dt3/6,  0,      dt2/2, 0,      dt,    0],
+        [0,      dt3/6,  0,      dt2/2, 0,      dt]
+    ])
+    return q * sigma_a**2
+
 # initializes a sensor with a name, uncertainty and its own faux measurements at each time step
 class UWB_sensor:
     def __init__(self, name, uncertainty, anchor_pos):
@@ -88,8 +145,8 @@ class EKF:
             [0, 0, 0, 0, 0, 1]
         ])
 
-        # Process noise (COME BACK TO THIS LATER)
-        self.Q = np.diag([0.01, 0.01, 0.05, 0.05, 0.01, 0.01])
+        # Process noise (working on nonlinear here)
+        self.Q = make_Q(dt, sigma_a=2.0)  
 
     # allows EKF to talk to the sensors and anchors
     def addSensor(self, sensor):
@@ -163,7 +220,7 @@ if __name__ == "__main__":
     
     # STUFF TO MESS WITH
     dt = 0.1
-    time = 50 # seconds sim runs
+    time = 625 # seconds sim runs
     x_pos = 1.0
     y_pos = 1.1
     x_velocity = 1.0  # slow starting velocity
@@ -176,9 +233,9 @@ if __name__ == "__main__":
     # THIS SECTION COULD / SHOULD BE CONDENSED --------------------------------------------------
     # Create sensors here:
     s1 = UWB_sensor("Anchor_1", uncertainty=0.04, anchor_pos=(0, 0))
-    s2 = UWB_sensor("Anchor_2", uncertainty=0.06, anchor_pos=(10, 0))
-    s3 = UWB_sensor("Anchor_3", uncertainty=0.02, anchor_pos=(0, 10))
-    s4 = UWB_sensor("Anchor_4", uncertainty=0.05, anchor_pos=(10, 10))
+    s2 = UWB_sensor("Anchor_2", uncertainty=0.06, anchor_pos=(1, 0))
+    s3 = UWB_sensor("Anchor_3", uncertainty=0.02, anchor_pos=(0, 2))
+    s4 = UWB_sensor("Anchor_4", uncertainty=0.05, anchor_pos=(1, 7))
 
     # add sensors to EKF **IMPORTANT**
     ekf.addSensor(s1)
@@ -202,14 +259,20 @@ if __name__ == "__main__":
     # Run simulation
     for step in range(time):
         # fake real motion without noise ***for testing only***
-        true_state = ekf.F @ true_state
-        true_px, true_py = true_state[0, 0], true_state[1, 0]
+        
+        # version for constant accel or velocity
+        #true_state = ekf.F @ true_state
+        #true_px, true_py = true_state[0, 0], true_state[1, 0]
+        
+        # version for ellipse, line, circle etc
+        t = step * dt
+        true_px, true_py = elliptical_path(t, [3,3], 3, 2, .1)
 
         ekf.step(true_px, true_py)
         state = ekf.x.flatten()
 
         # True position
-        true_x, true_y = true_state[0,0], true_state[1,0]
+        true_x, true_y = true_px, true_py
         true_x_history.append(true_x)
         true_y_history.append(true_y)
 
