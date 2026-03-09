@@ -1,7 +1,7 @@
 # 2D_XS_Kalman.py
 # Eleanor Champlin-Wilson
 # echamplinwilson@g.hmc.edu
-# Updated on 2/12/2026
+# Updated on 3/08/2026
 
 # Generalizing Kalman Filter for a 2D constant velocity model
 # A car with set acceleration and X # of distance sensors moves
@@ -81,6 +81,51 @@ def make_Q(dt, sigma_a=1.0):
     ])
     return q * sigma_a**2
 
+def brekkerWong_accel_model(rover, soil, state):
+        vx = state[2]
+        vy = state[3]
+        velocity = np.sqrt(vx**2 + vy**2)
+        omega = velocity/rover.wheel_radius + 1        
+        
+        # side calculation
+        coeff = (soil.kc / rover.wheel_width + soil.kphi)
+        
+        # slip
+        slip = (rover.wheel_radius*omega - velocity) / (rover.wheel_radius*omega)
+        slip = np.clip(slip, 0, 1)         
+        j = slip * rover.wheel_radius
+        
+        # sinkage:
+        z = ((rover.mass*9.81/rover.num_wheels)/coeff)**(1/soil.n)
+        
+        # normal stress:
+        sigma = coeff*(z**soil.n)
+
+        # shear stress:
+        tau = (soil.c + sigma*np.tan(np.radians(soil.phi))) * (1 - np.exp(-j/soil.k))        
+        
+        # contact area per wheel:
+        A = rover.wheel_width*2*np.sqrt(rover.wheel_radius*z)
+
+        # total traction force:
+        Ft = tau*A*rover.num_wheels
+        
+        # final forces and acceleration
+        wheel_load = rover.mass*9.81/rover.num_wheels
+        R = 0.1 * wheel_load
+
+        F_net = (Ft - R) * rover.num_wheels
+        a = F_net / rover.mass
+        
+        # acceleration division by direction 
+        if velocity > 1e-6:
+            ax = a * vx/velocity
+            ay = a * vy/velocity
+        else:
+            ax = a
+            ay = 0
+        return ax, ay
+
 # initializes a sensor with a name, uncertainty and its own faux measurements at each time step
 class UWB_sensor:
     def __init__(self, name, uncertainty, anchor_pos):
@@ -123,6 +168,23 @@ class UWB_sensor:
             return None
         return np.array([[self.value]])
 
+# added for brekker-wong implementation
+class Rover:
+    def __init__(self, mass, wheel_radius, wheel_width, num_wheels):
+        self.mass = mass
+        self.wheel_radius = wheel_radius
+        self.wheel_width = wheel_width
+        self.num_wheels = num_wheels
+        
+class Soil:
+    def __init__(self, kc, kphi, n, c, phi, k):
+        self.kc = kc
+        self.kphi = kphi
+        self.n = n
+        self.c = c
+        self.phi = phi
+        self.k = k
+
 # Actual EKF for 2D constant velocity model with distance measurements to anchors
 # note: measurements read in as z = distance to anchor, not (x,y) position
 # note: prediction done with x,y values making it nonlinear...ugh 
@@ -143,12 +205,13 @@ class EKF:
         self.sensors.append((sensor))
 
     # PREDICTION -------------------------------------
-
+    # adding in nonlinear accel plus brekker-wong model
+    
     def predict(self, u=None):
         dt = self.dt
         dt2 = 0.5*dt**2
 
-        ax, ay = 0.0, 0.0
+        ax, ay = 0, 0
         if u is not None:
             ax, ay = u
 
@@ -238,6 +301,11 @@ if __name__ == "__main__":
 
     ekf = EKF(dt)
     
+    # rover and soil creation // practice parameters
+    rover = Rover(mass=200, wheel_radius=0.3, wheel_width=0.2, num_wheels=4)
+    soil = Soil(kc=1500, kphi=1500, n=1.1, c=300, phi=35, k=0.03)   
+    
+     
     # Create sensors here:
     s1 = UWB_sensor("Anchor_1", uncertainty=0.04, anchor_pos=(0, 0))
     s2 = UWB_sensor("Anchor_2", uncertainty=0.06, anchor_pos=(10, 0))
@@ -268,10 +336,9 @@ if __name__ == "__main__":
         # fake real motion without noise ***for testing only***
         t = step * dt
 
-        x_acceleration = x_accel + 0.01 * np.sin(0.1 * t)
-        y_acceleration = y_accel + 0.01 * np.cos(0.1 * t)
+        ax, ay = brekkerWong_accel_model(rover, soil, ekf.x.flatten())
         
-        u = np.array([x_acceleration, y_acceleration])
+        u = np.array([ax, ay])
         
         # version for ellipse, line, circle etc
         true_px, true_py = elliptical_path(t, [3,3], 3, 2, .1)

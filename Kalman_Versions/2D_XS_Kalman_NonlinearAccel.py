@@ -1,7 +1,7 @@
 # 2D_XS_Kalman.py
 # Eleanor Champlin-Wilson
 # echamplinwilson@g.hmc.edu
-# Updated on 2/12/2026
+# Updated on 3/06/2026
 
 # Generalizing Kalman Filter for a 2D constant velocity model
 # A car with set acceleration and X # of distance sensors moves
