@@ -23,6 +23,9 @@ class EKF:
         self.P = np.eye(6) * 1.0 
         self.sensors = []
         dt2 = 0.5 * dt**2
+        self.innovation_ema = 0.0
+        self.alpha = 0.05  
+        self.target_innovation = 0.5  
 
         # Process noise (working on nonlinear here)
         self.Q = make_Q(dt, sigma_a=2.0)  
@@ -54,8 +57,15 @@ class EKF:
 
         # Predict next state
         self.x = self.F @ self.x + np.array([[0],[0],[0],[0],[ax*dt],[ay*dt]])
-        self.P = self.F @ self.P @ self.F.T + self.Q
+        
+        # attempting Q adaptive scaling
+        Q_scale = self.innovation_ema / self.target_innovation
+        Q_scale = np.clip(Q_scale, 0.5, 4.0)
 
+        Q_adaptive = self.Q * Q_scale
+
+        self.P = self.F @ self.P @ self.F.T + Q_adaptive
+        
     # Nonlinear distance to anchor **Pythagorean thm
     def h(self, anchor):
         px, py = self.x[0, 0], self.x[1, 0]
@@ -85,16 +95,39 @@ class EKF:
         if z is None:
             return
 
-        R = sensor.getR()
-        anchor = sensor.anchor_pos  # get anchor from sensor itself
+        anchor = sensor.anchor_pos
+
+        # predicted measurement
         z_pred = np.array([[self.h(anchor)]])
+
+        # Jacobian
         H = self.computeJacobian(anchor)
 
+        # residual
         y = z - z_pred
+
+        # ----- Innovation tracking -----
+        innovation_mag = np.linalg.norm(y)
+
+        self.innovation_ema = (
+            (1 - self.alpha) * self.innovation_ema
+            + self.alpha * innovation_mag
+        )
+
+        # ----- Adaptive R -----
+        R = sensor.getR()
+
+        R_scale = self.innovation_ema / self.target_innovation
+        R_scale = np.clip(R_scale, 0.5, 5.0)
+
+        R = R * R_scale
+
+        # ----- EKF update -----
         S = H @ self.P @ H.T + R
         K = self.P @ H.T @ np.linalg.inv(S)
+
         self.x = self.x + K @ y
-        self.P = (np.eye(6) - K @ H) @ self.P
+        self.P = (np.eye(len(self.x)) - K @ H) @ self.P
 
     # STEP -------------------------------------
 
