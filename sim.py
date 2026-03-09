@@ -1,5 +1,6 @@
 from matplotlib.patches import Ellipse
 import numpy as np
+import matplotlib.pyplot as plt
 
 def plot_covariance_ellipse(px, py, cov, n_std=1.0, **kwargs):
     """
@@ -92,11 +93,11 @@ def brekkerWong_accel_model(rover, soil, state):
         
         # acceleration division by direction 
         if velocity > 1e-6:
-            ax = a * vx/velocity
-            ay = a * vy/velocity
+            ax = float(a * vx/velocity)
+            ay = float(a * vy/velocity)
         else:
-            ax = a
-            ay = 0
+            ax = float(a)
+            ay = 0.0
         return ax, ay
 
 class Rover:
