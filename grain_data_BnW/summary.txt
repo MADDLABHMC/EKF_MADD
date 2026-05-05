@@ -1,0 +1,42 @@
+Grain Size Analysis Summary
+===========================
+
+True Value: 3.2500 mm
+
+Per-file statistics:
+File 1: mean = 6.4948 mm, uncertainty = 0.1328 mm
+File 2: mean = 6.2463 mm, uncertainty = 0.0563 mm
+File 3: mean = 5.8622 mm, uncertainty = 0.0561 mm
+File 4: mean = 5.7673 mm, uncertainty = 0.0801 mm
+File 5: mean = 6.1049 mm, uncertainty = 0.1085 mm
+File 6: mean = 5.0416 mm, uncertainty = 0.0512 mm
+File 7: mean = 5.2195 mm, uncertainty = 0.0840 mm
+File 8: mean = 5.4426 mm, uncertainty = 0.0386 mm
+File 9: mean = 6.0997 mm, uncertainty = 0.2823 mm
+File 10: mean = 6.5396 mm, uncertainty = 0.0377 mm
+
+Errors:
+File 1: error = 3.2448 mm
+File 2: error = 2.9963 mm
+File 3: error = 2.6122 mm
+File 4: error = 2.5173 mm
+File 5: error = 2.8549 mm
+File 6: error = 1.7916 mm
+File 7: error = 1.9695 mm
+File 8: error = 2.1926 mm
+File 9: error = 2.8497 mm
+File 10: error = 3.2896 mm
+
+RMSE: 2.6769 mm
+
+Coefficient of Variation:
+File 1: 0.0204
+File 2: 0.0090
+File 3: 0.0096
+File 4: 0.0139
+File 5: 0.0178
+File 6: 0.0102
+File 7: 0.0161
+File 8: 0.0071
+File 9: 0.0463
+File 10: 0.0058

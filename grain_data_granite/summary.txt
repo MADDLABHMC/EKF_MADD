@@ -1,0 +1,72 @@
+Grain Size Analysis Summary
+===========================
+
+True Value: 3.2500 mm
+
+Per-file statistics:
+File 1: mean = 3.2986 mm, uncertainty = 0.0378 mm
+File 2: mean = 3.3446 mm, uncertainty = 0.0236 mm
+File 3: mean = 3.3352 mm, uncertainty = 0.0294 mm
+File 4: mean = 3.2912 mm, uncertainty = 0.0351 mm
+File 5: mean = 3.2694 mm, uncertainty = 0.0174 mm
+File 6: mean = 3.2849 mm, uncertainty = 0.0161 mm
+File 7: mean = 3.2728 mm, uncertainty = 0.0304 mm
+File 8: mean = 3.2803 mm, uncertainty = 0.0226 mm
+File 9: mean = 3.3132 mm, uncertainty = 0.0301 mm
+File 10: mean = 3.2661 mm, uncertainty = 0.0283 mm
+File 11: mean = 3.3146 mm, uncertainty = 0.0226 mm
+File 12: mean = 3.2917 mm, uncertainty = 0.0241 mm
+File 13: mean = 3.3020 mm, uncertainty = 0.0294 mm
+File 14: mean = 3.3048 mm, uncertainty = 0.0228 mm
+File 15: mean = 3.3202 mm, uncertainty = 0.0269 mm
+File 16: mean = 3.3327 mm, uncertainty = 0.0273 mm
+File 17: mean = 3.3314 mm, uncertainty = 0.0253 mm
+File 18: mean = 3.3310 mm, uncertainty = 0.0232 mm
+File 19: mean = 3.3350 mm, uncertainty = 0.0213 mm
+File 20: mean = 3.3722 mm, uncertainty = 0.0261 mm
+
+Errors:
+File 1: error = 0.0486 mm
+File 2: error = 0.0946 mm
+File 3: error = 0.0852 mm
+File 4: error = 0.0412 mm
+File 5: error = 0.0194 mm
+File 6: error = 0.0349 mm
+File 7: error = 0.0228 mm
+File 8: error = 0.0303 mm
+File 9: error = 0.0632 mm
+File 10: error = 0.0161 mm
+File 11: error = 0.0646 mm
+File 12: error = 0.0417 mm
+File 13: error = 0.0520 mm
+File 14: error = 0.0548 mm
+File 15: error = 0.0702 mm
+File 16: error = 0.0827 mm
+File 17: error = 0.0814 mm
+File 18: error = 0.0810 mm
+File 19: error = 0.0850 mm
+File 20: error = 0.1222 mm
+
+RMSE: 0.0657 mm
+
+Coefficient of Variation:
+File 1: 0.0115
+File 2: 0.0070
+File 3: 0.0088
+File 4: 0.0107
+File 5: 0.0053
+File 6: 0.0049
+File 7: 0.0093
+File 8: 0.0069
+File 9: 0.0091
+File 10: 0.0087
+File 11: 0.0068
+File 12: 0.0073
+File 13: 0.0089
+File 14: 0.0069
+File 15: 0.0081
+File 16: 0.0082
+File 17: 0.0076
+File 18: 0.0070
+File 19: 0.0064
+File 20: 0.0077
