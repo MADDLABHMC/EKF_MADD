@@ -17,8 +17,8 @@ true_value = 3.25
 # overlay
 plt.figure()
 
-for i in range(1, 11):
-    filename = f'grain_data_BnW{i}.csv'
+for i in range(1, 15):
+    filename = f'grain_data_movement{i}.csv'
     df = pd.read_csv(filename)
     
     y = df['avg_diameter_mm'].dropna().values
@@ -54,7 +54,7 @@ covs = np.array([
     u/m if m != 0 else 0 for m, u in zip(means, uncertainties)
 ])
 
-x = np.arange(1, 11)
+x = np.arange(1, 15)
 
 # errorbar plot
 plt.figure()
@@ -89,8 +89,8 @@ plt.close()
 # convergence plot
 plt.figure()
 
-for i in range(1, 11):
-    df = pd.read_csv(f'grain_data_BnW{i}.csv')
+for i in range(1, 15):
+    df = pd.read_csv(f'grain_data_movement{i}.csv')
     y = df['avg_diameter_mm'].dropna().values
     
     running_mean = np.cumsum(y) / np.arange(1, len(y)+1)

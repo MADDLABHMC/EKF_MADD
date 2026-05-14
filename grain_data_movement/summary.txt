@@ -1,0 +1,54 @@
+Grain Size Analysis Summary
+===========================
+
+True Value: 3.2500 mm
+
+Per-file statistics:
+File 1: mean = 3.6626 mm, uncertainty = 0.2062 mm
+File 2: mean = 3.7549 mm, uncertainty = 0.2074 mm
+File 3: mean = 3.5701 mm, uncertainty = 0.1423 mm
+File 4: mean = 3.6073 mm, uncertainty = 0.3254 mm
+File 5: mean = 3.2995 mm, uncertainty = 0.2692 mm
+File 6: mean = 3.1951 mm, uncertainty = 0.1229 mm
+File 7: mean = 3.6269 mm, uncertainty = 0.1739 mm
+File 8: mean = 3.1243 mm, uncertainty = 0.1186 mm
+File 9: mean = 3.3411 mm, uncertainty = 0.2610 mm
+File 10: mean = 3.7607 mm, uncertainty = 0.1580 mm
+File 11: mean = 3.6669 mm, uncertainty = 0.0865 mm
+File 12: mean = 3.6873 mm, uncertainty = 0.0846 mm
+File 13: mean = 3.2951 mm, uncertainty = 0.1525 mm
+File 14: mean = 3.5527 mm, uncertainty = 0.1581 mm
+
+Errors:
+File 1: error = 0.4126 mm
+File 2: error = 0.5049 mm
+File 3: error = 0.3201 mm
+File 4: error = 0.3573 mm
+File 5: error = 0.0495 mm
+File 6: error = -0.0549 mm
+File 7: error = 0.3769 mm
+File 8: error = -0.1257 mm
+File 9: error = 0.0911 mm
+File 10: error = 0.5107 mm
+File 11: error = 0.4169 mm
+File 12: error = 0.4373 mm
+File 13: error = 0.0451 mm
+File 14: error = 0.3027 mm
+
+RMSE: 0.3324 mm
+
+Coefficient of Variation:
+File 1: 0.0563
+File 2: 0.0552
+File 3: 0.0399
+File 4: 0.0902
+File 5: 0.0816
+File 6: 0.0385
+File 7: 0.0479
+File 8: 0.0380
+File 9: 0.0781
+File 10: 0.0420
+File 11: 0.0236
+File 12: 0.0229
+File 13: 0.0463
+File 14: 0.0445

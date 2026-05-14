@@ -25,7 +25,7 @@ fy = intrinsics.fy
 print("fx:", fx, "fy:", fy)
 
 # CSV
-csv_file = open("grain_data_granite.csv", "w", newline="")
+csv_file = open("grain_data_movement.csv", "w", newline="")
 csv_writer = csv.writer(csv_file)
 
 csv_writer.writerow([
@@ -39,7 +39,7 @@ csv_writer.writerow([
 ])
 
 # Parameters (interval is a guess for rn)
-interval = 0.1
+interval = 0.01
 last_log_time = time.time()
 logging_enabled = False
 
