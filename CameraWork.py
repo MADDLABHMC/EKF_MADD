@@ -42,6 +42,7 @@ csv_writer.writerow([
 interval = 0.01
 last_log_time = time.time()
 logging_enabled = False
+diameter_offset_mm = 0.08 # offset value to try and center the data better on the known mean
 
 rolling_buffer = []
 max_buffer_size = 1500
@@ -168,7 +169,7 @@ try:
 
             if len(rolling_buffer) > 0:
                 areas = np.array(rolling_buffer)
-                diameters = np.sqrt(4 * areas / np.pi)
+                diameters = np.sqrt(4 * areas / np.pi)+ diameter_offset_mm
 
                 # MAD filtering
                 if total_samples > warmup_samples:
