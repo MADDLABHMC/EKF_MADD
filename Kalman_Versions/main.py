@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from kf import KF
+from Kalman_Versions.kf import KF
 
 # Settings
 dt = 0.1

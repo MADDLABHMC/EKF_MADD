@@ -55,51 +55,6 @@ def elliptical_path(t, center, a, b, omega):
     y = center[1] + b * np.sin(omega * t)
     return x, y
 
-def brekkerWong_accel_model(rover, soil, state):
-        vx = state[2]
-        vy = state[3]
-        velocity = np.sqrt(vx**2 + vy**2)
-        omega = velocity/rover.wheel_radius + 1        
-        
-        # side calculation
-        coeff = (soil.kc / rover.wheel_width + soil.kphi)
-        
-        # slip
-        slip = (rover.wheel_radius*omega - velocity) / (rover.wheel_radius*omega)
-        slip = np.clip(slip, 0, 1)         
-        j = slip * rover.wheel_radius
-        
-        # sinkage:
-        z = ((rover.mass*9.81/rover.num_wheels)/coeff)**(1/soil.n)
-        
-        # normal stress:
-        sigma = coeff*(z**soil.n)
-
-        # shear stress:
-        tau = (soil.c + sigma*np.tan(np.radians(soil.phi))) * (1 - np.exp(-j/soil.k))        
-        
-        # contact area per wheel:
-        A = rover.wheel_width*2*np.sqrt(rover.wheel_radius*z)
-
-        # total traction force:
-        Ft = tau*A*rover.num_wheels
-        
-        # final forces and acceleration
-        wheel_load = rover.mass*9.81/rover.num_wheels
-        R = 0.1 * wheel_load
-
-        F_net = (Ft - R) * rover.num_wheels
-        a = F_net / rover.mass
-        
-        # acceleration division by direction 
-        if velocity > 1e-6:
-            ax = float(a * vx/velocity)
-            ay = float(a * vy/velocity)
-        else:
-            ax = float(a)
-            ay = 0.0
-        return ax, ay
-
 class Rover:
     def __init__(self, mass, wheel_radius, wheel_width, num_wheels):
         self.mass = mass

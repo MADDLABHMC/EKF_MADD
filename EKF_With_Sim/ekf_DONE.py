@@ -1,144 +1,155 @@
 import numpy as np
 
-def make_Q(dt, sigma_a=1.0):
-    dt2 = dt**2
-    dt3 = dt**3
-    dt4 = dt**4
-    dt5 = dt**5
-
-    q = np.array([
-        [dt5/20, 0,      dt4/8, 0,      dt3/6, 0],
-        [0,      dt5/20, 0,      dt4/8, 0,      dt3/6],
-        [dt4/8,  0,      dt3/3, 0,      dt2/2, 0],
-        [0,      dt4/8,  0,      dt3/3, 0,      dt2/2],
-        [dt3/6,  0,      dt2/2, 0,      dt,    0],
-        [0,      dt3/6,  0,      dt2/2, 0,      dt]
-    ])
-    return q * sigma_a**2
-
 class EKF:
-    def __init__(self, dt):
+    def __init__(self, dt, rover, soil):
         self.dt = dt
-        self.x = np.zeros((6, 1))
-        self.P = np.eye(6) * 1.0 
+        self.rover = rover
+        self.soil = soil
+
+        # [px, py, vx, vy]
+        self.x = np.zeros((4, 1))
+        self.P = np.eye(4)
+
+        self.Q = np.eye(4) * 0.01
+
         self.sensors = []
-        dt2 = 0.5 * dt**2
-        self.innovation_ema = 0.0
-        self.alpha = 0.05  
-        self.target_innovation = 0.5  
 
-        # Process noise (working on nonlinear here)
-        self.Q = make_Q(dt, sigma_a=2.0)  
-
-    # allows EKF to talk to the sensors and anchors
     def addSensor(self, sensor):
-        self.sensors.append((sensor))
+        self.sensors.append(sensor)
 
-    # PREDICTION -------------------------------------
-    # adding in nonlinear accel plus brekker-wong model
-    
-    def predict(self, u=None):
+    # Bekker-W based dynamics / makin the accel
+    def dynamics(self, x, wheel_omega):
         dt = self.dt
-        dt2 = 0.5*dt**2
 
-        ax, ay = 0, 0
-        if u is not None:
-            ax, ay = u
+        px, py, vx, vy = x.flatten()
 
-        # recompute F each time
-        self.F = np.array([
-            [1, 0, dt, 0, dt2, 0],
-            [0, 1, 0, dt, 0, dt2],
-            [0, 0, 1, 0, dt, 0],
-            [0, 0, 0, 1, 0, dt],
-            [0, 0, 0, 0, 1, 0],
-            [0, 0, 0, 0, 0, 1]
-        ])
+        velocity = np.hypot(vx, vy)
 
-        # Predict next state
-        self.x = self.F @ self.x + np.array([[0],[0],[0],[0],[ax*dt],[ay*dt]])
-        
-        # attempting Q adaptive scaling
-        Q_scale = self.innovation_ema / self.target_innovation
-        Q_scale = np.clip(Q_scale, 0.5, 4.0)
+        if velocity < 1e-6:
+            direction_x, direction_y = 1.0, 0.0
+        else:
+            direction_x = vx / velocity
+            direction_y = vy / velocity
 
-        Q_adaptive = self.Q * Q_scale
+        r = self.rover.wheel_radius
 
-        self.P = self.F @ self.P @ self.F.T + Q_adaptive
-        
-    # Nonlinear distance to anchor **Pythagorean thm
+        omega_eff = wheel_omega + 1e-6
+        slip = (r * wheel_omega - velocity) / omega_eff
+        slip = np.clip(slip, 0.0, 1.0)
+
+        coeff = (self.soil.kc / self.rover.wheel_width) + self.soil.kphi
+
+        j = slip * r
+
+        z = ((self.rover.mass * 9.81 / self.rover.num_wheels) / coeff) ** (1 / self.soil.n)
+
+        sigma = coeff * (z ** self.soil.n)
+
+        tau = (
+            self.soil.c
+            + sigma * np.tan(np.radians(self.soil.phi))
+        ) * (1 - np.exp(-j / (self.soil.k + 1e-6)))
+
+        A = self.rover.wheel_width * 2 * np.sqrt(r * z + 1e-6)
+
+        Ft = tau * A * self.rover.num_wheels
+
+        resistance = 0.1 * self.rover.mass * 9.81
+
+        F_net = Ft - resistance
+
+        a = F_net / self.rover.mass
+
+        ax = a * direction_x
+        ay = a * direction_y
+
+        px_new = px + vx * dt + 0.5 * ax * dt**2
+        py_new = py + vy * dt + 0.5 * ay * dt**2
+
+        vx_new = vx + ax * dt
+        vy_new = vy + ay * dt
+
+        return np.array([[px_new], [py_new], [vx_new], [vy_new]])
+
+    # prediction
+    def predict(self, wheel_omega):
+        self.x = self.dynamics(self.x, wheel_omega)
+        F = self.compute_F(wheel_omega)
+        self.P = F @ self.P @ F.T + self.Q
+
+    # jacobian from dynamics
+    def compute_F(self, wheel_omega, eps=1e-5):
+        n = self.x.shape[0]
+        F = np.zeros((n, n))
+
+        fx = self.dynamics(self.x, wheel_omega)
+
+        for i in range(n):
+            x_perturbed = self.x.copy()
+            x_perturbed[i, 0] += eps
+
+            fx_p = self.dynamics(x_perturbed, wheel_omega)
+
+            F[:, i] = ((fx_p - fx) / eps).flatten()
+
+        return F
+
+    # measurement model
     def h(self, anchor):
         px, py = self.x[0, 0], self.x[1, 0]
         ax, ay = anchor
         return np.sqrt((px - ax)**2 + (py - ay)**2)
 
-    # Jacobian of h(x)...ew
-    def computeJacobian(self, anchor):
+    def H_jacobian(self, anchor):
         px, py = self.x[0, 0], self.x[1, 0]
         ax, ay = anchor
 
         dx = px - ax
         dy = py - ay
-        dist = np.sqrt(dx**2 + dy**2)
+        dist = np.hypot(dx, dy) + 1e-6
 
-        if dist < 1e-6:
-            dist = 1e-6
-
-        H = np.array([[dx/dist, dy/dist, 0, 0, 0, 0]])
+        H = np.array([[dx/dist, dy/dist, 0, 0]])
         return H
+    
+    def camera_soil_parameters(features):
+        D10, D50, D90, Cu = features
 
-    # UPDATE -------------------------------------
-    # note: performed per sensor for now
+        # placeholder mapping (you will replace later)
+        kc = 1000 + 2.0 * D50
+        kphi = 800 + 1.5 * Cu
+        n = 1.0 + 0.1 * (D90 / (D10 + 1e-6))
+        c = 200 + 0.5 * D10
+        phi = 30 + 0.05 * Cu
+        k = 0.02 + 0.001 * D50
 
-    def updateWithSensor(self, sensor):
-        z = sensor.getMeasurement()
-        if z is None:
-            return
+        return kc, kphi, n, c, phi, k
 
-        anchor = sensor.anchor_pos
+    # update
+    def update_uwb(self, z):
+        px, py = self.x[0,0], self.x[1,0]
 
-        # predicted measurement
-        z_pred = np.array([[self.h(anchor)]])
+        z_pred = np.array([[px],
+                        [py]])
 
-        # Jacobian
-        H = self.computeJacobian(anchor)
+        H = np.array([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0]
+        ])
 
-        # residual
-        y = z - z_pred
+        y = z.reshape(2,1) - z_pred
 
-        # ----- Innovation tracking -----
-        innovation_mag = np.linalg.norm(y)
+        R = np.eye(2) * 0.05  # tune this laterrr with data
 
-        self.innovation_ema = (
-            (1 - self.alpha) * self.innovation_ema
-            + self.alpha * innovation_mag
-        )
-
-        # ----- Adaptive R -----
-        R = sensor.getR()
-
-        R_scale = self.innovation_ema / self.target_innovation
-        R_scale = np.clip(R_scale, 0.5, 5.0)
-
-        R = R * R_scale
-
-        # ----- EKF update -----
         S = H @ self.P @ H.T + R
         K = self.P @ H.T @ np.linalg.inv(S)
 
         self.x = self.x + K @ y
-        self.P = (np.eye(len(self.x)) - K @ H) @ self.P
 
-    # STEP -------------------------------------
+        I = np.eye(4)
+        self.P = (I - K @ H) @ self.P
 
-    def step(self, true_px, true_py, u = None):
-        """
-        Perform one EKF step:
-        - Predict
-        - Have each sensor generate a noisy measurement from true position
-        - Update EKF with each sensor
-        """
-        self.predict(u)
-        for sensor in self.sensors:
-            sensor.stepFakeMeasurement(true_px, true_py)  # generate measurement
-            self.updateWithSensor(sensor)                  # EKF update 
+    # step
+    def step(self, wheel_omega, z_uwb):
+
+        self.predict(wheel_omega)
+        self.update_uwb(z_uwb)
