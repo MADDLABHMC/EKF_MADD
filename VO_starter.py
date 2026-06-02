@@ -3,7 +3,7 @@ import numpy as np
 import pyrealsense2 as rs
 
 
-class MVO:
+class VO:
 
     def __init__(self, K):
 
@@ -260,7 +260,7 @@ K = np.array([
     [0, 0, 1]
 ])
 
-mvo = MVO(K)
+vo = VO(K)
 
 while True:
 
@@ -275,7 +275,7 @@ while True:
         color_frame.get_data()
     )
 
-    result = mvo.process(frame)
+    result = vo.process(frame)
 
     if result is not None:
 
