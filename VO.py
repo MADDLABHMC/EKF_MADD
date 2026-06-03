@@ -7,7 +7,7 @@ import time
 class VO:
 
     # constructor needing a K matrix
-    def __init__(self, K, freeze_duration=10.0):
+    def __init__(self, K, freeze_duration):
 
         self.K = K
         self.freeze_duration = freeze_duration
@@ -85,6 +85,7 @@ class VO:
 
     # main processing function to compute the essential matrix from the current frame 
     def getE(self, frame):
+        
         current_time = time.time()
         if self.start_time is None:
             self.start_time = current_time
@@ -110,7 +111,7 @@ class VO:
 
         matches = self.matcher.match(self.prev_des, des)
         matches = sorted(matches, key=lambda x: x.distance)
-        matches = [m for m in matches if m.distance < 5]
+        matches = [m for m in matches if m.distance < 30]
         matches = matches[:200]
 
         if len(matches) < 8:
@@ -128,21 +129,25 @@ class VO:
             self.K,
             method=cv2.RANSAC,
             prob=0.999,
-            threshold=1.0
+            threshold=1.5
         )
 
         if E is not None:
             inliers = int(mask.sum()) if mask is not None else len(matches)
             self.E_candidates.append((E, inliers))
             self.E_last = E
+            print(f"[VO] found E candidate #{len(self.E_candidates)} with {inliers} inliers")
 
         self.prev_gray = gray
         self.prev_kp = kp
         self.prev_des = des
 
         elapsed = current_time - self.start_time
+        print(f"[VO] calibration elapsed={elapsed:.2f}s, valid E candidates={len(self.E_candidates)}")
+
         if elapsed >= self.freeze_duration and self.E_candidates:
             self.E_frozen = self._average_E_candidates()
+            print("[VO] calibration complete: E frozen from", len(self.E_candidates), "candidates")
             return self.E_frozen
 
         return None
@@ -153,7 +158,7 @@ class VO:
     def is_calibrated(self):
         return self.E_frozen is not None
     
-    def getMotion(self, frame, E):
+    def getMotion(self, frame, E, display=False):
         
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = self.preprocess(gray)
@@ -174,10 +179,23 @@ class VO:
         # Match features between previous and current frame
         matches = self.matcher.match(self.prev_des, des)
         matches = sorted(matches, key=lambda x: x.distance)
-        matches = [m for m in matches if m.distance < 5]
+        matches = [m for m in matches if m.distance < 30]
         matches = matches[:200]
 
         if len(matches) < 8:
+            if display:
+                vis = frame.copy()
+                cv2.putText(
+                    vis,
+                    f"waiting for matches: {len(matches)}",
+                    (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 255, 255),
+                    2
+                )
+                cv2.imshow("mvo", vis)
+                cv2.waitKey(1)
             self.prev_gray = gray
             self.prev_kp = kp
             self.prev_des = des
@@ -188,12 +206,32 @@ class VO:
         pts_curr = np.float32([kp[m.trainIdx].pt for m in matches])
 
         # Use frozen E to recover pose (R, t)
-        _, R, t, mask = cv2.recoverPose(E, pts_curr, pts_prev, self.K)
+        _, R, t, mask = cv2.recoverPose(E, pts_prev, pts_curr, self.K)
 
         inlier_mask = mask.ravel().astype(bool)
         inliers = np.count_nonzero(inlier_mask)
 
-        if inliers < 15:
+        if inliers < 10:
+            if display:
+                vis = frame.copy()
+                pts_prev_in = pts_prev[inlier_mask]
+                pts_curr_in = pts_curr[inlier_mask]
+                for p1, p2 in zip(pts_prev_in, pts_curr_in):
+                    x1, y1 = map(int, p1)
+                    x2, y2 = map(int, p2)
+                    cv2.circle(vis, (x2, y2), 2, (0, 255, 255), -1)
+                    cv2.line(vis, (x1, y1), (x2, y2), (255, 255, 0), 1)
+                cv2.putText(
+                    vis,
+                    f"waiting for inliers: {inliers}",
+                    (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 255, 255),
+                    2
+                )
+                cv2.imshow("mvo", vis)
+                cv2.waitKey(1)
             self.prev_gray = gray
             self.prev_kp = kp
             self.prev_des = des
@@ -219,6 +257,28 @@ class VO:
         self.dx_filt = self.alpha * self.dx_filt + (1 - self.alpha) * dx
         self.dy_filt = self.alpha * self.dy_filt + (1 - self.alpha) * dy
         self.dyaw_filt = self.alpha * self.dyaw_filt + (1 - self.alpha) * yaw
+
+        if display:
+            vis = frame.copy()
+            pts_prev_in = pts_prev[inlier_mask]
+            pts_curr_in = pts_curr[inlier_mask]
+            for p1, p2 in zip(pts_prev_in, pts_curr_in):
+                x1, y1 = map(int, p1)
+                x2, y2 = map(int, p2)
+                cv2.circle(vis, (x2, y2), 2, (0, 255, 0), -1)
+                cv2.line(vis, (x1, y1), (x2, y2), (255, 0, 0), 1)
+
+            cv2.putText(
+                vis,
+                f"inliers: {inliers}",
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 0),
+                2
+            )
+            cv2.imshow("mvo", vis)
+            cv2.waitKey(1)
 
         self.prev_gray = gray
         self.prev_kp = kp
