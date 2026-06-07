@@ -22,10 +22,11 @@ class VO:
             nlevels=8
         )
 
-        self.matcher = cv2.BFMatcher(
-            cv2.NORM_HAMMING,
-            crossCheck=True
-        )
+        self.matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
+        self.match_ratio = 0.75
+        self.max_matches = 200
+        self.min_inliers = 15
+        self.min_inlier_ratio = 0.3
 
         self.clahe = cv2.createCLAHE(
             clipLimit=2.0,
@@ -43,6 +44,11 @@ class VO:
         self.E_frozen = None
         self.E_last = None
 
+        # cumulative camera motion in the vehicle plane
+        self.pose = np.zeros(2, dtype=np.float32)  # [x, y]
+        self.pose_yaw = 0.0
+        self.trajectory = [self.pose.copy()]
+
     # localized image contrast enhancement using CLAHE
     def preprocess(self, gray):
 
@@ -55,6 +61,22 @@ class VO:
             gray,
             None
         )
+
+    def _match_features(self, des1, des2):
+        if des1 is None or des2 is None:
+            return []
+
+        knn_matches = self.matcher.knnMatch(des1, des2, k=2)
+        good_matches = []
+        for m_n in knn_matches:
+            if len(m_n) < 2:
+                continue
+            m, n = m_n
+            if m.distance < self.match_ratio * n.distance and m.distance < 60:
+                good_matches.append(m)
+
+        good_matches = sorted(good_matches, key=lambda x: x.distance)
+        return good_matches[: self.max_matches]
 
     def _normalize_E(self, E):
         E = E.astype(np.float64)
@@ -109,10 +131,7 @@ class VO:
             self.prev_des = des
             return None
 
-        matches = self.matcher.match(self.prev_des, des)
-        matches = sorted(matches, key=lambda x: x.distance)
-        matches = [m for m in matches if m.distance < 30]
-        matches = matches[:200]
+        matches = self._match_features(self.prev_des, des)
 
         if len(matches) < 8:
             self.prev_gray = gray
@@ -129,7 +148,7 @@ class VO:
             self.K,
             method=cv2.RANSAC,
             prob=0.999,
-            threshold=1.5
+            threshold=3.5
         )
 
         if E is not None:
@@ -155,6 +174,31 @@ class VO:
     def getFrozenE(self):
         return self.E_frozen
 
+    def getTrajectory(self):
+        return [tuple(p) for p in self.trajectory]
+
+    def drawTrajectory(self, size=600, scale=150):
+        traj_img = np.zeros((size, size, 3), dtype=np.uint8)
+        center = (size // 2, size // 2)
+        trajectory = self.getTrajectory()
+
+        for i in range(1, len(trajectory)):
+            x0, y0 = trajectory[i - 1]
+            x1, y1 = trajectory[i]
+            pt0 = (int(center[0] + x0 * scale), int(center[1] - y0 * scale))
+            pt1 = (int(center[0] + x1 * scale), int(center[1] - y1 * scale))
+            cv2.line(traj_img, pt0, pt1, (0, 255, 0), 2)
+
+        if trajectory:
+            x, y = trajectory[-1]
+            pt = (int(center[0] + x * scale), int(center[1] - y * scale))
+            cv2.circle(traj_img, pt, 5, (0, 0, 255), -1)
+
+        cv2.circle(traj_img, center, 3, (255, 255, 255), -1)
+        cv2.putText(traj_img, f"x={trajectory[-1][0]:.2f} y={trajectory[-1][1]:.2f}", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.putText(traj_img, "origin", (center[0] + 10, center[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        return traj_img
+
     def is_calibrated(self):
         return self.E_frozen is not None
     
@@ -177,10 +221,7 @@ class VO:
             return None
 
         # Match features between previous and current frame
-        matches = self.matcher.match(self.prev_des, des)
-        matches = sorted(matches, key=lambda x: x.distance)
-        matches = [m for m in matches if m.distance < 30]
-        matches = matches[:200]
+        matches = self._match_features(self.prev_des, des)
 
         if len(matches) < 8:
             if display:
@@ -210,8 +251,9 @@ class VO:
 
         inlier_mask = mask.ravel().astype(bool)
         inliers = np.count_nonzero(inlier_mask)
+        inlier_ratio = float(inliers) / max(1, len(matches))
 
-        if inliers < 10:
+        if inliers < self.min_inliers or inlier_ratio < self.min_inlier_ratio:
             if display:
                 vis = frame.copy()
                 pts_prev_in = pts_prev[inlier_mask]
@@ -223,7 +265,7 @@ class VO:
                     cv2.line(vis, (x1, y1), (x2, y2), (255, 255, 0), 1)
                 cv2.putText(
                     vis,
-                    f"waiting for inliers: {inliers}",
+                    f"waiting for inliers: {inliers}/{len(matches)}", 
                     (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.7,
@@ -237,16 +279,16 @@ class VO:
             self.prev_des = des
             return None
 
-        # Extract yaw from rotation matrix
-        yaw = np.arctan2(R[1, 0], R[0, 0])
+        # Extract yaw from rotation matrix around the camera's vertical axis
+        yaw = np.arctan2(R[0, 2], R[2, 2])
 
-        # Extract translation components
+        # Extract translation components in camera-local coordinates
         tx = float(t[0])
         tz = float(t[2])
 
-        # Map to motion (you can tune these mappings)
-        dx = tz
-        dy = 0.15 * tx
+        # Map to local camera motion (forward, right)
+        dx = -tz
+        dy = tx
 
         # Clip to reasonable ranges
         dx = np.clip(dx, -1.0, 1.0)
@@ -258,6 +300,17 @@ class VO:
         self.dy_filt = self.alpha * self.dy_filt + (1 - self.alpha) * dy
         self.dyaw_filt = self.alpha * self.dyaw_filt + (1 - self.alpha) * yaw
 
+        # update global orientation and pose
+        self.pose_yaw += self.dyaw_filt
+        cos_yaw = np.cos(self.pose_yaw)
+        sin_yaw = np.sin(self.pose_yaw)
+        global_step = np.array([
+            cos_yaw * self.dx_filt - sin_yaw * self.dy_filt,
+            sin_yaw * self.dx_filt + cos_yaw * self.dy_filt
+        ], dtype=np.float32)
+
+        self.pose += global_step
+        self.trajectory.append(self.pose.copy())
         if display:
             vis = frame.copy()
             pts_prev_in = pts_prev[inlier_mask]
@@ -287,6 +340,8 @@ class VO:
         return {
             "dx": float(self.dx_filt),
             "dy": float(self.dy_filt),
+            "x": float(self.pose[0]),
+            "y": float(self.pose[1]),
             "dyaw": float(self.dyaw_filt),
             "inliers": int(inliers),
             "matches": int(len(matches))

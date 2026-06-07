@@ -4,6 +4,7 @@ import numpy as np
 import pyrealsense2 as rs
 from VO import VO
 
+
 # camera setup using pyrealsense2 to initialze the camera 
 pipeline = rs.pipeline()
 config = rs.config()
@@ -58,6 +59,7 @@ try:
 
     E = vo.getFrozenE()
     print("Calibration complete\nE matrix:\n", E)
+    print("Determinant:", np.linalg.det(E))
     print("Entering motion estimation. First valid motion output may take a few frames.")
     print("Press ESC in the OpenCV window to exit.")
 
@@ -77,9 +79,13 @@ try:
             print(
                 f"dx={motion['dx']:.3f} "
                 f"dy={motion['dy']:.3f} "
-                f"dyaw={motion['dyaw']:.3f} "
+                f"x={motion['x']:.3f} "
+                f"y={motion['y']:.3f} "
                 f"inliers={motion['inliers']} "
                 f"matches={motion['matches']}")
+
+            traj_img = vo.drawTrajectory()
+            cv2.imshow("trajectory", traj_img)
 
         key = cv2.waitKey(1) & 0xFF
         if key == 27:
