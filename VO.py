@@ -48,6 +48,11 @@ class VO:
             if len(m_n) < 2:
                 continue
             m, n = m_n
+            
+            # the Lowes test, the best match should be 25% better than the second-best match
+            # also it has to pass the distance cap rn is 60 
+            # n.distance is the hanning distance 
+            # if all conditions met, add to the list of good matches
             if m.distance < self.match_ratio * n.distance and m.distance < 60:
                 good_matches.append(m)
                 
@@ -88,7 +93,7 @@ class VO:
         pts_prev = np.float32([self.prev_kp[m.queryIdx].pt for m in matches])
         pts_curr = np.float32([kp[m.trainIdx].pt for m in matches])
 
-        # pass and return 
+        # pass and return to get E from the matched points
         # note keep mask in future / return it eventully so can pass to find motion
         E, mask = cv2.findEssentialMat(
             pts_curr, pts_prev, self.K,
