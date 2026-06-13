@@ -12,12 +12,12 @@ intrinsics = profile.get_stream(rs.stream.color) \
     .as_video_stream_profile().get_intrinsics()
 
 K = np.array([
-    [intrinsics.fx, 0,            intrinsics.ppx],
+    [intrinsics.fx, 0,             intrinsics.ppx],
     [0,             intrinsics.fy, intrinsics.ppy],
     [0,             0,             1             ]
 ])
 
-print("K matrix:\n", K)
+print("K=\n", K)
 
 vo = VO(K)
 
@@ -29,14 +29,13 @@ try:
             continue
 
         frame = np.asanyarray(color_frame.get_data())
-        result = vo.getE(frame, display=True)
+        result = vo.VO_process(frame, display=True)
 
         if result:
             print(
-                f"inliers={result['inliers']:3d} "
-                f"matches={result['matches']:3d} "
-                f"ratio={result['inlier_ratio']:.2f}\n"
-                f"E=\n{np.round(result['E'], 4)}"
+                f"dx={result['dx']:.3f} dy={result['dy']:.3f} dz={result['dz']:.3f} "
+                f"dyaw={result['dyaw']:.3f} inliers={result['inliers']} "
+                f"sv={result['sv_ratio']:.3f}"
             )
 
         if cv2.waitKey(1) & 0xFF == 27:

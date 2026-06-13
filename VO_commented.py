@@ -49,9 +49,9 @@ class VO:
             
             # the Lowes test, the best match should be 25% better than the second-best match
             # also it has to pass the distance cap rn is 60 
-            # n.distance is the hanning distance 
+            # n.distance is the hanning distance (bit differential)
             # if all conditions met, add to the list of good matches
-            if m.distance < self.match_ratio * n.distance and m.distance < 60:
+            if m.distance < self.match_ratio * n.distance and m.distance < 60: # <60 bits different of 256
                 good_matches.append(m)
                 
         # sort the best matches by quality score (distance)

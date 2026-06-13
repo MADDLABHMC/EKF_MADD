@@ -76,6 +76,30 @@ class EKF:
         self.x = self.dynamics(self.x, wheel_omega)
         F = self.compute_F(wheel_omega)
         self.P = F @ self.P @ F.T + self.Q
+        
+    
+    #### THIS IS NEW AND PULLED FROM VO_MAIN
+    def update_vo(self, dx, dy, inlier_ratio=1.0, sv_ratio=1.0):        
+        z = np.array([[dx], [dy]])
+
+        z_pred = np.array([[self.x[2, 0]], 
+                        [self.x[3, 0]]]) 
+
+        H = np.array([
+            [0, 0, 1, 0],
+            [0, 0, 0, 1]
+        ])
+
+        y = z - z_pred
+
+        vo_quality = inlier_ratio * sv_ratio  # both between 0 and 1
+        R_vo = np.eye(2) * (0.3 / max(vo_quality, 0.1))
+
+        S = H @ self.P @ H.T + R_vo
+        K = self.P @ H.T @ np.linalg.inv(S)
+
+        self.x = self.x + K @ y
+        self.P = (np.eye(4) - K @ H) @ self.P
 
     # jacobian from dynamics
     def compute_F(self, wheel_omega, eps=1e-5):
@@ -148,8 +172,9 @@ class EKF:
         I = np.eye(4)
         self.P = (I - K @ H) @ self.P
 
-    # step
-    def step(self, wheel_omega, z_uwb):
-
+    # step ADDED VO HERE
+    def step(self, wheel_omega, z_uwb, vo_result=None):
         self.predict(wheel_omega)
         self.update_uwb(z_uwb)
+        if vo_result is not None:
+            self.update_vo(vo_result["dx"], vo_result["dy"])
