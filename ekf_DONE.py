@@ -10,7 +10,7 @@ class EKF:
         self.x = np.zeros((4, 1))
         self.P = np.eye(4)
 
-        self.Q = np.eye(4) * 0.01
+        self.Q = np.eye(4) * 0.01  # come tune laterrr
 
         self.sensors = []
 

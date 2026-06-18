@@ -10,6 +10,7 @@ class VO:
         self.prev_gray = None
         self.prev_kp = None
         self.prev_des = None
+        self.prev_depth = None
 
         self.orb = cv2.ORB_create(
             nfeatures=500,
@@ -41,7 +42,7 @@ class VO:
         good_matches = sorted(good_matches, key=lambda x: x.distance)
         return good_matches[:self.max_matches]
 
-    def _process_frame(self, frame):
+    def _process_frame(self, frame, depth_frame=None):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = self.clahe.apply(gray)
         kp, des = self.orb.detectAndCompute(gray, None)
@@ -50,6 +51,7 @@ class VO:
             self.prev_gray = gray
             self.prev_kp = kp
             self.prev_des = des
+            self.prev_depth = depth_frame
             return None
 
         matches = self._match_features(self.prev_des, des)
@@ -59,21 +61,27 @@ class VO:
             self.prev_gray = gray
             self.prev_kp = kp
             self.prev_des = des
+            self.prev_depth = depth_frame
             return None
 
         pts_prev = np.float32([self.prev_kp[m.queryIdx].pt for m in matches])
         pts_curr = np.float32([kp[m.trainIdx].pt for m in matches])
 
+        prev_depth = self.prev_depth
+
         self.prev_gray = gray
         self.prev_kp = kp
         self.prev_des = des
+        self.prev_depth = depth_frame
 
         return {
             "kp": kp,
             "des": des,
             "pts_prev": pts_prev,
             "pts_curr": pts_curr,
-            "matches": matches
+            "matches": matches,
+            "prev_depth": prev_depth,
+            "curr_depth": depth_frame
         }
 
     def _computeE(self, pts_prev, pts_curr):
@@ -105,33 +113,90 @@ class VO:
             "inlier_ratio": inliers / len(pts_prev)
         }
 
-    def _computeMotion(self, pts_prev, pts_curr, E, mask):
+    def _backproject(self, pt, depth_frame):
+        u, v = pt
+        d = depth_frame.get_distance(int(round(u)), int(round(v)))
+        if d <= 0:
+            return None
+
+        fx, fy = self.K[0, 0], self.K[1, 1]
+        cx, cy = self.K[0, 2], self.K[1, 2]
+
+        X = (u - cx) * d / fx
+        Y = (v - cy) * d / fy
+        Z = d
+
+        return np.array([X, Y, Z])
+
+    def _recover_scale(self, pts_prev, pts_curr, R, t_unit, prev_depth, curr_depth, inlier_mask):
+        if prev_depth is None or curr_depth is None:
+            return None
+
+        t_unit = t_unit.flatten()
+        scales = []
+
+        for i in range(len(pts_prev)):
+            if not inlier_mask[i]:
+                continue
+
+            P1 = self._backproject(pts_prev[i], prev_depth)
+            P2 = self._backproject(pts_curr[i], curr_depth)
+
+            if P1 is None or P2 is None:
+                continue
+
+            residual = P2 - R @ P1
+            s = np.dot(residual, t_unit)
+            scales.append(s)
+
+        if len(scales) < 5:
+            return None
+
+        scales = np.array(scales)
+        return float(np.median(scales))
+
+    def _computeMotion(self, pts_prev, pts_curr, E, mask, prev_depth=None, curr_depth=None):
         _, R, t, _ = cv2.recoverPose(E, pts_prev, pts_curr, self.K, mask=mask)
 
-        print(f"R=\n{np.round(R, 4)}\nt={t.ravel().round(4)}")
+        print(f"R=\n{np.round(R, 4)}\nt_unit={t.ravel().round(4)}")
 
-        dx = float(t[0, 0])
-        dy = float(t[1, 0])
-        dz = float(t[2, 0])
-        dyaw = float(np.arctan2(R[0, 2], R[2, 2]))
+        t_unit = t.flatten()
 
-        if abs(abs(dx) - 0.5774) < 0.01 and abs(abs(dy) - 0.5774) < 0.01:
+        if abs(abs(t_unit[0]) - 0.5774) < 0.01 and abs(abs(t_unit[1]) - 0.5774) < 0.01:
             print("[VO] degenerate t rejected")
             return None
+
+        dyaw = float(np.arctan2(R[0, 2], R[2, 2]))
 
         if abs(dyaw) > 0.5:
             print("[VO] dyaw too large, rejected")
             return None
 
+        inlier_mask = mask.ravel().astype(bool)
+        scale = self._recover_scale(
+            pts_prev, pts_curr, R, t_unit, prev_depth, curr_depth, inlier_mask
+        )
+
+        if scale is None:
+            print("[VO] scale recovery failed, falling back to unit-scale t")
+            scale = 1.0
+
+        t_scaled = t_unit * scale
+
+        dx = float(t_scaled[0])
+        dy = float(t_scaled[1])
+        dz = float(t_scaled[2])
+
         return {
             "dx": dx,
             "dy": dy,
             "dz": dz,
-            "dyaw": dyaw
+            "dyaw": dyaw,
+            "scale": float(scale)
         }
 
-    def VO_process(self, frame, display=False):
-        frame_data = self._process_frame(frame)
+    def VO_process(self, frame, depth_frame=None, display=False):
+        frame_data = self._process_frame(frame, depth_frame)
         if frame_data is None:
             return None
 
@@ -142,10 +207,14 @@ class VO:
         if e_data is None:
             return None
 
-        motion = self._computeMotion(pts_prev, pts_curr, e_data["E"], e_data["mask"])
+        motion = self._computeMotion(
+            pts_prev, pts_curr, e_data["E"], e_data["mask"],
+            prev_depth=frame_data["prev_depth"],
+            curr_depth=frame_data["curr_depth"]
+        )
         if motion is None:
             return None
-        
+
         if display:
             vis = frame.copy()
             inlier_mask = e_data["mask"].ravel().astype(bool)

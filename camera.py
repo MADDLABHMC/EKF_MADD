@@ -1,30 +1,11 @@
-import pyrealsense2 as rs
 import numpy as np
 import cv2
-import time
 
-class Camera:
-    def __init__(self, interval=0.1):
-        self.interval = interval
 
-        self.pipeline = rs.pipeline()
-        self.config = rs.config()
-
-        self.config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-        self.config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-
-        self.pipeline.start(self.config)
-
-        self.align = rs.align(rs.stream.color)
-
-        profile = self.pipeline.get_active_profile()
-        color_stream = profile.get_stream(rs.stream.color)
-        intrinsics = color_stream.as_video_stream_profile().get_intrinsics()
-
-        self.fx = intrinsics.fx
-        self.fy = intrinsics.fy
-
-        self.last_log_time = time.time()
+class GrainCamera:
+    def __init__(self, fx, fy):
+        self.fx = fx
+        self.fy = fy
 
         self.alpha = 0.2
         self.prev_D50 = None
@@ -35,20 +16,7 @@ class Camera:
 
         self.latest = None
 
-    # processing
-    def step(self):
-
-        frames = self.pipeline.wait_for_frames()
-        aligned = self.align.process(frames)
-
-        depth = aligned.get_depth_frame()
-        color = aligned.get_color_frame()
-
-        if not depth or not color:
-            return None
-
-        frame = np.asanyarray(color.get_data())
-
+    def step(self, frame, depth_frame):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         blur = cv2.GaussianBlur(gray, (5, 5), 0)
 
@@ -59,7 +27,7 @@ class Camera:
             11, 2
         )
 
-        kernel = np.ones((3,3), np.uint8)
+        kernel = np.ones((3, 3), np.uint8)
         thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
 
         contours, _ = cv2.findContours(
@@ -69,7 +37,6 @@ class Camera:
         )
 
         areas = []
-
         seen = []
 
         for cnt in contours:
@@ -77,27 +44,27 @@ class Camera:
                 continue
 
             ellipse = cv2.fitEllipse(cnt)
-            (x,y),(MA,ma),_ = ellipse
+            (x, y), (MA, ma), _ = ellipse
 
             if MA < 5 or ma < 5:
                 continue
 
             cx, cy = int(x), int(y)
 
-            if any(np.linalg.norm(np.array([cx,cy]) - np.array(p)) < 10 for p in seen):
+            if any(np.linalg.norm(np.array([cx, cy]) - np.array(p)) < 10 for p in seen):
                 continue
 
-            seen.append((cx,cy))
+            seen.append((cx, cy))
 
             depths = []
 
-            for dx in range(-2,3):
-                for dy in range(-2,3):
+            for dx in range(-2, 3):
+                for dy in range(-2, 3):
                     px = cx + dx
                     py = cy + dy
 
                     if 0 <= px < 640 and 0 <= py < 480:
-                        d = depth.get_distance(px, py)
+                        d = depth_frame.get_distance(px, py)
                         if d > 0:
                             depths.append(d)
 
@@ -115,23 +82,21 @@ class Camera:
             major_m = MA * sx
             minor_m = ma * sy
 
-            area_m2 = np.pi * (major_m/2)*(minor_m/2)
+            area_m2 = np.pi * (major_m / 2) * (minor_m / 2)
             area_mm2 = area_m2 * 1e6
 
             if 0.001 < area_mm2 < 10000:
                 areas.append(area_mm2)
 
-        # buffer
         self.buffer.extend(areas)
 
         if len(self.buffer) > self.max_buffer:
             self.buffer = self.buffer[-self.max_buffer:]
 
-        # output features
         if len(self.buffer) < 20:
             return None
 
-        diameters = np.sqrt(4*np.array(self.buffer)/np.pi)
+        diameters = np.sqrt(4 * np.array(self.buffer) / np.pi)
 
         D10 = np.percentile(diameters, 10)
         D50 = np.percentile(diameters, 50)
@@ -139,10 +104,9 @@ class Camera:
 
         Cu = D90 / (D10 + 1e-6)
 
-        # smoothing stuff
         if self.prev_D50 is not None:
-            D50 = 0.2*D50 + 0.8*self.prev_D50
-            Cu = 0.2*Cu + 0.8*self.prev_Cu
+            D50 = 0.2 * D50 + 0.8 * self.prev_D50
+            Cu = 0.2 * Cu + 0.8 * self.prev_Cu
 
         self.prev_D50 = D50
         self.prev_Cu = Cu
@@ -153,6 +117,3 @@ class Camera:
 
     def get_features(self):
         return self.latest
-
-    def stop(self):
-        self.pipeline.stop()
