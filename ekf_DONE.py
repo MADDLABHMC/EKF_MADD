@@ -1,3 +1,6 @@
+# Extended Kalman Filter implementation for rover localization
+# takes input from UWB, VO, and a Bekker-Wong model
+
 import numpy as np
 
 class EKF:
@@ -172,7 +175,7 @@ class EKF:
         I = np.eye(4)
         self.P = (I - K @ H) @ self.P
 
-    # step ADDED VO HERE
+    # step
     def step(self, wheel_omega, z_uwb, vo_result=None):
         self.predict(wheel_omega)
         self.update_uwb(z_uwb)

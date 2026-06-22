@@ -1,10 +1,14 @@
+# Data collection script for the 3 sensor types: UWB, Grain Camera, and Visual Odometry
+# This script collects data from the UWB, Grain Camera, and Visual Odometry sensors simultaneously.
+# Used to feed the EKF and tune underlying parameters.
+
 import time
 import csv
 import serial
 import numpy as np
 import cv2
 import pyrealsense2 as rs
-from camera import GrainCamera
+from GrainCamera import GrainCamera
 from VO import VO
 
 

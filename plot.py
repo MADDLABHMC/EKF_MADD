@@ -22,7 +22,7 @@ plt.scatter([x_cum[0]], [y_cum[0]], color="green", s=60, label="start", zorder=5
 plt.scatter([x_cum[-1]], [y_cum[-1]], color="red", s=60, label="end", zorder=5)
 plt.xlabel("cumulative x")
 plt.ylabel("cumulative y")
-plt.title("VO Cumulative Trajectory (unit scale)")
+plt.title("VO Cumulative Trajectory")
 plt.axis("equal")
 plt.grid(True)
 plt.legend()

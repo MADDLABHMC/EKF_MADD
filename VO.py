@@ -1,3 +1,7 @@
+# Visual Odometry implementation
+# uses the Intel RealSense camera
+# implements feature detection, matching, and pose estimation
+
 import cv2
 import numpy as np
 
@@ -162,8 +166,12 @@ class VO:
 
         t_unit = t.flatten()
 
+        if np.max(np.abs(t_unit)) > 0.99:
+            print("[VO] degenerate t rejected — axis aligned")
+            return None
+
         if abs(abs(t_unit[0]) - 0.5774) < 0.01 and abs(abs(t_unit[1]) - 0.5774) < 0.01:
-            print("[VO] degenerate t rejected")
+            print("[VO] degenerate t rejected — diagonal")
             return None
 
         dyaw = float(np.arctan2(R[0, 2], R[2, 2]))
@@ -178,8 +186,8 @@ class VO:
         )
 
         if scale is None:
-            print("[VO] scale recovery failed, falling back to unit-scale t")
-            scale = 1.0
+            print("[VO] scale recovery failed, dropping frame")
+            return None
 
         t_scaled = t_unit * scale
 

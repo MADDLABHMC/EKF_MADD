@@ -1,11 +1,13 @@
-# come back and include the last 4 data points and either pick the best or average
+# main class for the EKF
+# calls the EKF's prediction and update steps
+# feeds it data from the 3 sensor csv files to mimic steps
 
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from ekf_DONE import EKF
-from Kalman_Versions.sim_DONE import Rover, Soil
+from sim_DONE import Rover, Soil
 
 
 UWB_CSV = "uwb_data.csv"
@@ -14,6 +16,11 @@ VO_CSV = "vo_data.csv"
 
 dt = 0.1
 wheel_omega = 8.0
+
+VO_SCALE = 1.0
+VO_STATIONARY_CUTOFF = 3.0  # seconds to skip at start
+VO_TO_WORLD = np.array([[ 1,  0],
+                         [ 0, -1]])
 
 
 def load_csv(path):
@@ -70,6 +77,13 @@ rover = Rover(200, 0.3, 0.2, 4)
 soil = Soil(1500, 1500, 1.1, 300, 35, 0.03)
 ekf = EKF(dt, rover, soil)
 
+first_uwb = next(
+    (r for r in uwb_rows if r["timestamp"] > VO_STATIONARY_CUTOFF), uwb_rows[0]
+)
+ekf.x[0, 0] = first_uwb["x"]
+ekf.x[1, 0] = first_uwb["y"]
+print(f"EKF initialized at UWB position: x={first_uwb['x']:.3f} y={first_uwb['y']:.3f}")
+
 uwb_i = 0
 grain_i = 0
 vo_i = 0
@@ -83,6 +97,13 @@ log = {
 }
 
 
+def avg(rows, keys):
+    if not rows:
+        return None
+    recent = rows[-4:]
+    return {k: float(np.mean([r[k] for r in recent])) for k in keys}
+
+
 def replay_step():
     global t, uwb_i, grain_i, vo_i
 
@@ -91,39 +112,43 @@ def replay_step():
 
     window_end = t + dt
 
-    latest_uwb = None
+    uwb_window = []
     while uwb_i < len(uwb_rows) and uwb_rows[uwb_i]["timestamp"] < window_end:
-        latest_uwb = uwb_rows[uwb_i]
+        uwb_window.append(uwb_rows[uwb_i])
         uwb_i += 1
 
-    latest_grain = None
+    grain_window = []
     while grain_i < len(grain_rows) and grain_rows[grain_i]["timestamp"] < window_end:
-        latest_grain = grain_rows[grain_i]
+        grain_window.append(grain_rows[grain_i])
         grain_i += 1
 
-    latest_vo = None
+    vo_window = []
     while vo_i < len(vo_rows) and vo_rows[vo_i]["timestamp"] < window_end:
-        latest_vo = vo_rows[vo_i]
+        vo_window.append(vo_rows[vo_i])
         vo_i += 1
 
-    if latest_grain is not None:
-        features = np.array([
-            latest_grain["D10"], latest_grain["D50"],
-            latest_grain["D90"], latest_grain["Cu"]
-        ])
+    avg_grain = avg(grain_window, ["D10", "D50", "D90", "Cu"])
+    if avg_grain is not None:
+        features = np.array([avg_grain["D10"], avg_grain["D50"],
+                             avg_grain["D90"], avg_grain["Cu"]])
         ekf.soil = soil_from_camera(features, ekf.soil)
 
+    avg_vo = avg(vo_window, ["dx", "dy", "dz", "dyaw"])
     vo_result = None
-    if latest_vo is not None:
+    if avg_vo is not None:
+        vo_disp = np.array([avg_vo["dx"], avg_vo["dy"]]) * VO_SCALE
+        world_disp = VO_TO_WORLD @ vo_disp
         vo_result = {
-            "dx": latest_vo["dx"],
-            "dy": latest_vo["dy"],
-            "dz": latest_vo["dz"],
-            "dyaw": latest_vo["dyaw"],
+            "dx": float(world_disp[0]),
+            "dy": float(world_disp[1]),
+            "dz": avg_vo["dz"],
+            "dyaw": avg_vo["dyaw"],
         }
 
-    if latest_uwb is not None:
-        z_uwb = np.array([[latest_uwb["x"]], [latest_uwb["y"]]])
+    avg_uwb = avg(uwb_window, ["x", "y"])
+
+    if avg_uwb is not None:
+        z_uwb = np.array([[avg_uwb["x"]], [avg_uwb["y"]]])
         ekf.step(wheel_omega, z_uwb, vo_result)
     else:
         ekf.predict(wheel_omega)

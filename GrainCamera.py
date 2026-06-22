@@ -1,3 +1,7 @@
+# class file for the GrainCamera object that does the grain size analysis
+# is called intermittently during the data collection process
+# takes a frame and analyzes it to pull elliptical contour data or "grains"
+
 import numpy as np
 import cv2
 
