@@ -1,8 +1,13 @@
+'''
+Plot the cumulative trajectory of the Visual Odometry data.
+Can be swapped with the UWB data sets to plot and compare trajectories.
+'''
+
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
 
-CSV_PATH = "vo_data.csv"
+CSV_PATH = "vo_data_scaled.csv"
 
 dx_vals = []
 dy_vals = []

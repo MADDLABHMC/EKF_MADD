@@ -1,6 +1,6 @@
-# class file for the GrainCamera object that does the grain size analysis
-# is called intermittently during the data collection process
-# takes a frame and analyzes it to pull elliptical contour data or "grains"
+'''
+A class for analyzing grain size in images.
+'''
 
 import numpy as np
 import cv2
@@ -8,6 +8,11 @@ import cv2
 
 class GrainCamera:
     def __init__(self, fx, fy):
+        '''
+        Initialize the GrainCamera with the camera's intrinsic parameters.
+        fx: The focal length in the x-direction (pixels)
+        fy: The focal length in the y-direction (pixels)
+        '''
         self.fx = fx
         self.fy = fy
 
@@ -21,6 +26,11 @@ class GrainCamera:
         self.latest = None
 
     def step(self, frame, depth_frame):
+        '''
+        Process a single frame and extract grain size information.
+        frame: The input image frame
+        depth_frame: The depth frame corresponding to the image
+        '''
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         blur = cv2.GaussianBlur(gray, (5, 5), 0)
 
@@ -120,4 +130,9 @@ class GrainCamera:
         return self.latest
 
     def get_features(self):
+        '''
+        Get the latest extracted grain size features.
+        Returns:
+            The latest extracted grain size features as a numpy array.
+        '''
         return self.latest

@@ -1,6 +1,8 @@
-# Data collection script for the 3 sensor types: UWB, Grain Camera, and Visual Odometry
-# This script collects data from the UWB, Grain Camera, and Visual Odometry sensors simultaneously.
-# Used to feed the EKF and tune underlying parameters.
+'''
+Data collection script for the 3 sensor types: UWB, Grain Camera, and Visual Odometry
+This script collects data from the UWB, Grain Camera, and Visual Odometry sensors simultaneously.
+Used to feed the EKF and tune underlying parameters.
+'''
 
 import time
 import csv
@@ -11,12 +13,13 @@ import pyrealsense2 as rs
 from GrainCamera import GrainCamera
 from VO import VO
 
-
+# connection types
 UWB_PORT = "COM5"
 UWB_BAUD = 115200
 GRAIN_EVERY = 50
 OUTPUT_DIR = "."
 
+# initializing data files
 uwb_file = open(f"{OUTPUT_DIR}/uwb_data.csv", "w", newline="")
 uwb_writer = csv.writer(uwb_file)
 uwb_writer.writerow(["timestamp", "x", "y", "quality"])
@@ -32,7 +35,7 @@ vo_writer.writerow([
     "inliers", "matches", "inlier_ratio", "sv_ratio", "scale"
 ])
 
-
+# pulling and parsing UWB data 
 def parse_uwb_line(line):
     parts = line.strip().split(",")
     if len(parts) < 7 or parts[0] != "POS":
@@ -46,6 +49,7 @@ def parse_uwb_line(line):
         return None
 
 
+# initializing UWB serial connection / beginning data stream to pull from
 uwb_ser = None
 try:
     uwb_ser = serial.Serial(UWB_PORT, UWB_BAUD, timeout=0.01)
@@ -65,7 +69,7 @@ except Exception as e:
     print(f"[UWB] could not open {UWB_PORT}: {e}")
     print("[UWB] continuing without UWB data")
 
-
+# camera pipeline initialization
 pipeline = rs.pipeline()
 config = rs.config()
 config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
@@ -77,6 +81,7 @@ align = rs.align(rs.stream.color)
 intrinsics = profile.get_stream(rs.stream.color) \
     .as_video_stream_profile().get_intrinsics()
 
+# getting K matrix from camera intrinsics
 K = np.array([
     [intrinsics.fx, 0,             intrinsics.ppx],
     [0,             intrinsics.fy, intrinsics.ppy],
@@ -87,9 +92,9 @@ print("K=\n", K)
 vo = VO(K)
 grain_camera = GrainCamera(intrinsics.fx, intrinsics.fy)
 
-
 step = 0
 
+# do the logging simultaneously 
 try:
     print("Logging started. Press ESC in the VO window to stop.")
 
@@ -141,6 +146,7 @@ try:
             print("ESC pressed, stopping.")
             break
 
+# make sure everything is closed properly
 finally:
     pipeline.stop()
     cv2.destroyAllWindows()

@@ -1,6 +1,7 @@
-# Visual Odometry implementation
-# uses the Intel RealSense camera
-# implements feature detection, matching, and pose estimation
+'''
+Visual Odometry implementation
+Uses the Intel RealSense camera for feature detection, matching, and pose estimation.
+'''
 
 import cv2
 import numpy as np
@@ -9,6 +10,12 @@ import numpy as np
 class VO:
 
     def __init__(self, K):
+        '''
+        Initialize the Visual Odometry class.
+        
+        Args:
+            K (numpy.ndarray): The intrinsic camera matrix.
+        '''
         self.K = K
 
         self.prev_gray = None
@@ -30,6 +37,16 @@ class VO:
         self.clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
 
     def _match_features(self, des1, des2):
+        '''
+        Match features between two sets of descriptors.
+
+        Args:
+            des1 (numpy.ndarray): The first set of descriptors.
+            des2 (numpy.ndarray): The second set of descriptors.
+
+        Returns:
+            list: A list of good matches.
+        '''
         if des1 is None or des2 is None:
             return []
 
@@ -47,6 +64,16 @@ class VO:
         return good_matches[:self.max_matches]
 
     def _process_frame(self, frame, depth_frame=None):
+        '''
+        Process a single frame for visual odometry.
+
+        Args:
+            frame (numpy.ndarray): The input frame.
+            depth_frame (numpy.ndarray): The depth frame.
+
+        Returns:
+            dict: A dictionary containing the processed frame data.
+        '''
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = self.clahe.apply(gray)
         kp, des = self.orb.detectAndCompute(gray, None)
@@ -89,6 +116,16 @@ class VO:
         }
 
     def _computeE(self, pts_prev, pts_curr):
+        '''
+        Compute the essential matrix from two sets of points.
+
+        Args:
+            pts_prev (numpy.ndarray): The previous points.
+            pts_curr (numpy.ndarray): The current points.
+
+        Returns:
+            dict: A dictionary containing the essential matrix and related information.
+        '''
         E, mask = cv2.findEssentialMat(
             pts_curr, pts_prev, self.K,
             method=cv2.RANSAC,
@@ -133,6 +170,22 @@ class VO:
         return np.array([X, Y, Z])
 
     def _recover_scale(self, pts_prev, pts_curr, R, t_unit, prev_depth, curr_depth, inlier_mask):
+        '''
+        Recover the scale of the motion from the 3D points and the essential matrix.
+
+        Args:
+            pts_prev (numpy.ndarray): The previous points.
+            pts_curr (numpy.ndarray): The current points.
+            R (numpy.ndarray): The rotation matrix.
+            t_unit (numpy.ndarray): The unit translation vector.
+            prev_depth (numpy.ndarray): The previous depth frame.
+            curr_depth (numpy.ndarray): The current depth frame.
+            inlier_mask (numpy.ndarray): The mask of inlier points.
+
+        Returns:
+            float: The recovered scale.
+        '''
+        
         if prev_depth is None or curr_depth is None:
             return None
 
@@ -204,6 +257,17 @@ class VO:
         }
 
     def VO_process(self, frame, depth_frame=None, display=False):
+        '''
+        Process a frame for visual odometry.
+
+        Args:
+            frame (numpy.ndarray): The input frame.
+            depth_frame (numpy.ndarray): The depth frame.
+            display (bool): Whether to display the results.
+
+        Returns:
+            dict: A dictionary containing the visual odometry results.
+        '''
         frame_data = self._process_frame(frame, depth_frame)
         if frame_data is None:
             return None

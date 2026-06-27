@@ -1,13 +1,9 @@
-# main class for the EKF
-# calls the EKF's prediction and update steps
-# feeds it data from the 3 sensor csv files to mimic steps
-
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from ekf_DONE import EKF
-from sim_DONE import Rover, Soil
+from ekf import EKF
+from BekkerWongObjects import Rover, Soil
 
 
 UWB_CSV = "uwb_data.csv"
@@ -17,10 +13,11 @@ VO_CSV = "vo_data.csv"
 dt = 0.1
 wheel_omega = 8.0
 
-VO_SCALE = 1.0
-VO_STATIONARY_CUTOFF = 3.0  # seconds to skip at start
+VO_SCALE = 3.0
+VO_STATIONARY_CUTOFF = 3.0
 VO_TO_WORLD = np.array([[ 1,  0],
                          [ 0, -1]])
+UWB_MIN_QUALITY = 65
 
 
 def load_csv(path):
@@ -145,7 +142,8 @@ def replay_step():
             "dyaw": avg_vo["dyaw"],
         }
 
-    avg_uwb = avg(uwb_window, ["x", "y"])
+    uwb_window_filtered = [r for r in uwb_window if r["quality"] >= UWB_MIN_QUALITY]
+    avg_uwb = avg(uwb_window_filtered, ["x", "y"])
 
     if avg_uwb is not None:
         z_uwb = np.array([[avg_uwb["x"]], [avg_uwb["y"]]])

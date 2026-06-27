@@ -13,7 +13,7 @@ class EKF:
         self.x = np.zeros((4, 1))
         self.P = np.eye(4)
 
-        self.Q = np.eye(4) * 0.01  # come tune laterrr
+        self.Q = np.eye(4) * 0.025  # come tune laterrr
 
         self.sensors = []
 
@@ -165,7 +165,7 @@ class EKF:
 
         y = z.reshape(2,1) - z_pred
 
-        R = np.eye(2) * 0.05  # tune this laterrr with data
+        R = np.eye(2) * 0.25  # tune this laterrr with data
 
         S = H @ self.P @ H.T + R
         K = self.P @ H.T @ np.linalg.inv(S)
