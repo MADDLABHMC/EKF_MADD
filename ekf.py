@@ -141,7 +141,7 @@ class EKF:
     def camera_soil_parameters(features):
         D10, D50, D90, Cu = features
 
-        # placeholder mapping (you will replace later)
+        # placeholder mapping
         kc = 1000 + 2.0 * D50
         kphi = 800 + 1.5 * Cu
         n = 1.0 + 0.1 * (D90 / (D10 + 1e-6))
@@ -165,7 +165,7 @@ class EKF:
 
         y = z.reshape(2,1) - z_pred
 
-        R = np.eye(2) * 0.25  # tune this laterrr with data
+        R = np.eye(2) * 0.28  # tune this laterrr with data
 
         S = H @ self.P @ H.T + R
         K = self.P @ H.T @ np.linalg.inv(S)

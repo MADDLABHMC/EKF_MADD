@@ -6,9 +6,9 @@ from ekf import EKF
 from BekkerWongObjects import Rover, Soil
 
 
-UWB_CSV = "uwb_data.csv"
-GRAIN_CSV = "grain_data.csv"
-VO_CSV = "vo_data.csv"
+UWB_CSV = "trial_data/trial3/uwb_data.csv"
+GRAIN_CSV = "trial_data/trial3/grain_data.csv"
+VO_CSV = "trial_data/trial3/vo_data.csv"
 
 dt = 0.1
 wheel_omega = 8.0
